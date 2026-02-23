@@ -6,6 +6,7 @@ import { createRenderer, renderScene } from "./render/renderer";
 import { createPhysicsBridge, sendToPhysics, applyLatestSnapshot } from "./integration/bridge";
 import type { MainToPhysicsMessage } from "./integration/physicsMessages";
 import { updateDebugOverlay } from "./debug/overlay";
+import { ensureHud, updateHud } from "./render/hud";
 
 const canvasId = "game-canvas";
 
@@ -41,6 +42,8 @@ function main() {
   const state = createInitialGameState(canvas.width, canvas.height);
   spawnPlayer(state, { x: canvas.width / 2, y: canvas.height / 2, z: 0 });
 
+  ensureHud();
+
   const worker = createPhysicsWorker();
   const bridge = createPhysicsBridge(worker);
 
@@ -64,6 +67,7 @@ function main() {
     applyLatestSnapshot(bridge, state);
     renderScene(renderer, state);
     updateDebugOverlay();
+    updateHud(state);
 
     requestAnimationFrame(loop);
   }

@@ -47,5 +47,7 @@ export interface Entity {
   scale?: number;
   /** Game time (seconds) when this entity starts participating in asteroid-asteroid collisions. */
   collisionEnableTime?: number;
+  /** Index into the asteroid mesh variants array; determines the asteroid's shape. */
+  meshVariant?: number;
 }
 

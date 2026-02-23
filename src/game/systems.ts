@@ -3,7 +3,8 @@ import { EntityKind, type Quaternion } from "./types";
 import type { ControlState } from "../input/controls";
 import {
   computeAsteroidAsteroidManifolds,
-  computeBulletAsteroidManifolds
+  computeBulletAsteroidManifolds,
+  computeShipAsteroidManifolds
 } from "./collisions";
 
 function clampMagnitude(value: number, maxMagnitude: number): number {
@@ -61,6 +62,13 @@ function spawnDriftingAsteroid(state: GameState): void {
 
   const speed = 60 + Math.random() * 90;
 
+  // Randomise shape and size for each spawned asteroid.
+  const MESH_COUNT = 6;
+  const meshVariant = Math.floor(Math.random() * MESH_COUNT);
+  // Scale tiers: small (0.5), medium (0.85), large (1.3) with some jitter.
+  const sizeTiers = [0.45, 0.75, 1.0, 1.3];
+  const scale = sizeTiers[Math.floor(Math.random() * sizeTiers.length)] + (Math.random() * 0.15 - 0.075);
+
   addEntity(state, {
     kind: EntityKind.Asteroid,
     transform: {
@@ -74,12 +82,16 @@ function spawnDriftingAsteroid(state: GameState): void {
         z: 0
       },
       angularVelocity: { x: 0, y: 0, z: 0 }
-    }
+    },
+    scale,
+    meshVariant
   });
 }
 
 const FRAGMENT_SCALE = 0.45; // Fragments are smaller pieces of the original asteroid.
 const FRAGMENT_COLLISION_DELAY_SECONDS = 0.4;
+/** Asteroids smaller than this scale do not fragment further — they just vanish. */
+const MIN_FRAGMENT_SCALE = 0.18;
 
 function spawnAsteroidExplosion(state: GameState, asteroidId: number): void {
   const asteroid = state.entities.get(asteroidId);
@@ -98,6 +110,11 @@ function spawnAsteroidExplosion(state: GameState, asteroidId: number): void {
     const vx = Math.cos(angle) * speed;
     const vy = Math.sin(angle) * speed;
 
+    // Fragments pick a nearby mesh variant so they look related to the parent.
+    const MESH_COUNT = 6;
+    const parentVariant = asteroid.meshVariant ?? 0;
+    const fragmentVariant = (parentVariant + Math.floor(Math.random() * 3)) % MESH_COUNT;
+
     addEntity(state, {
       kind: EntityKind.Asteroid,
       transform: {
@@ -109,7 +126,8 @@ function spawnAsteroidExplosion(state: GameState, asteroidId: number): void {
         angularVelocity: { x: 0, y: 0, z: 0 }
       },
       scale: fragmentScale,
-      collisionEnableTime: state.timeSeconds + FRAGMENT_COLLISION_DELAY_SECONDS
+      collisionEnableTime: state.timeSeconds + FRAGMENT_COLLISION_DELAY_SECONDS,
+      meshVariant: fragmentVariant
     });
   }
 }
@@ -185,10 +203,11 @@ export function updateGameSystems(state: GameState, dtSeconds: number, control: 
     entity.transform.position.y += entity.physics.linearVelocity.y * dtSeconds;
   }
 
-  // Asteroid–asteroid collision: separate once, then velocity response (no bounce for slow contacts).
-  const separationBias = 6;
-  const slowContactThreshold = 40; // below this approach speed, no bounce (stops jitter)
-  const restitution = 0.35;
+  // Asteroid–asteroid collision: positional correction + impulse-based velocity response.
+  // slop: small tolerance to avoid micro-corrections on barely-touching circles (prevents jitter).
+  const slop = 1.0;
+  // Near-elastic restitution — space rocks bounce crisply and conserve most kinetic energy.
+  const restitution = 0.85;
   const invMassSum = (ma: number, mb: number) => 1 / ma + 1 / mb;
 
   const asteroidManifolds = computeAsteroidAsteroidManifolds(state);
@@ -199,7 +218,8 @@ export function updateGameSystems(state: GameState, dtSeconds: number, control: 
     const { normal, penetration } = m;
     const massA = Math.max(0.01, (a.scale ?? 1) ** 2);
     const massB = Math.max(0.01, (b.scale ?? 1) ** 2);
-    const totalSep = penetration + separationBias;
+    // Only correct the overlap beyond the slop threshold.
+    const totalSep = Math.max(0, penetration - slop);
     const moveA = (massB / (massA + massB)) * totalSep;
     const moveB = (massA / (massA + massB)) * totalSep;
     a.transform.position.x -= normal.x * moveA;
@@ -210,10 +230,10 @@ export function updateGameSystems(state: GameState, dtSeconds: number, control: 
     const vRel =
       (a.physics.linearVelocity.x - b.physics.linearVelocity.x) * normal.x +
       (a.physics.linearVelocity.y - b.physics.linearVelocity.y) * normal.y;
-    if (vRel >= 0) continue;
-    const approachSpeed = -vRel;
-    const e = approachSpeed >= slowContactThreshold ? restitution : 0;
-    const j = (-(1 + e) * vRel) / invMassSum(massA, massB);
+    // Normal points A→B, so vRel > 0 means A approaches B. Skip if already separating.
+    if (vRel <= 0) continue;
+    // Apply impulse for all contacts — no slow-contact shortcut that would kill momentum transfer.
+    const j = (-(1 + restitution) * vRel) / invMassSum(massA, massB);
     a.physics.linearVelocity.x += (j / massA) * normal.x;
     a.physics.linearVelocity.y += (j / massA) * normal.y;
     b.physics.linearVelocity.x -= (j / massB) * normal.x;
@@ -268,10 +288,58 @@ export function updateGameSystems(state: GameState, dtSeconds: number, control: 
   state.bulletAsteroidManifolds = computeBulletAsteroidManifolds(state);
 
   for (const manifold of state.bulletAsteroidManifolds) {
-    spawnAsteroidExplosion(state, manifold.asteroidId);
+    const asteroid = state.entities.get(manifold.asteroidId);
+    // Only fragment if the asteroid is large enough; tiny asteroids just vanish.
+    if (asteroid && (asteroid.scale ?? 1) > MIN_FRAGMENT_SCALE) {
+      spawnAsteroidExplosion(state, manifold.asteroidId);
+    }
     state.entities.delete(manifold.bulletId);
     state.entities.delete(manifold.asteroidId);
     state.bulletLifetimes.delete(manifold.bulletId);
+  }
+
+  // Ship–asteroid bounce: two-body impulse so both the ship and the rock react.
+  const shipRestitution = 0.6;
+  // Ship mass is small relative to asteroids so it gets knocked around convincingly.
+  const shipMass = 0.3;
+  const shipSlop = 1.0;
+
+  for (const m of computeShipAsteroidManifolds(state)) {
+    const asteroid = state.entities.get(m.asteroidId);
+    if (!asteroid?.physics || !ship.physics) continue;
+
+    const { normal, penetration } = m;
+    const asteroidMass = Math.max(0.01, (asteroid.scale ?? 1) ** 2);
+
+    // Positional correction: push the ship away from the asteroid.
+    const totalSep = Math.max(0, penetration - shipSlop);
+    const moveShip = (asteroidMass / (shipMass + asteroidMass)) * totalSep;
+    const moveAsteroid = (shipMass / (shipMass + asteroidMass)) * totalSep;
+    ship.transform.position.x -= normal.x * moveShip;
+    ship.transform.position.y -= normal.y * moveShip;
+    asteroid.transform.position.x += normal.x * moveAsteroid;
+    asteroid.transform.position.y += normal.y * moveAsteroid;
+
+    // Velocity impulse — normal points ship→asteroid, so vRel > 0 means approaching.
+    const vRel =
+      (ship.physics.linearVelocity.x - asteroid.physics.linearVelocity.x) * normal.x +
+      (ship.physics.linearVelocity.y - asteroid.physics.linearVelocity.y) * normal.y;
+    if (vRel <= 0) continue; // already separating
+
+    const j = (-(1 + shipRestitution) * vRel) / (1 / shipMass + 1 / asteroidMass);
+    ship.physics.linearVelocity.x += (j / shipMass) * normal.x;
+    ship.physics.linearVelocity.y += (j / shipMass) * normal.y;
+    asteroid.physics.linearVelocity.x -= (j / asteroidMass) * normal.x;
+    asteroid.physics.linearVelocity.y -= (j / asteroidMass) * normal.y;
+
+    // Deal damage proportional to impact speed; invincibility window prevents chip damage.
+    const damageCooldown = 0.4; // seconds
+    if (state.timeSeconds - state.lastDamageTime >= damageCooldown) {
+      const impactSpeed = Math.abs(vRel);
+      const damage = Math.min(25, Math.max(5, impactSpeed * 0.05));
+      state.health = Math.max(0, state.health - damage);
+      state.lastDamageTime = state.timeSeconds;
+    }
   }
 }
 

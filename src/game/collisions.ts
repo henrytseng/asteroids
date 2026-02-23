@@ -2,6 +2,12 @@ import type { GameState } from "./state";
 import type { Entity, EntityId, Vector2 } from "./types";
 import { EntityKind } from "./types";
 
+export interface ShipAsteroidManifold {
+  asteroidId: EntityId;
+  normal: Vector2;    // points from ship toward asteroid
+  penetration: number;
+}
+
 export interface Aabb {
   minX: number;
   minY: number;
@@ -112,6 +118,8 @@ export function computeBulletAsteroidManifolds(state: GameState): BulletAsteroid
   return manifolds;
 }
 
+const ASTEROID_BASE_RADIUS = 40;
+
 export function computeAsteroidAsteroidManifolds(state: GameState): AsteroidAsteroidManifold[] {
   const asteroids: Entity[] = [];
   for (const entity of state.entities.values()) {
@@ -124,22 +132,56 @@ export function computeAsteroidAsteroidManifolds(state: GameState): AsteroidAste
   const manifolds: AsteroidAsteroidManifold[] = [];
   for (let i = 0; i < asteroids.length; i++) {
     const a = asteroids[i];
-    const aabbA = makeAabbForEntity(a);
-    if (!aabbA) continue;
+    const rA = ASTEROID_BASE_RADIUS * (a.scale ?? 1);
     for (let j = i + 1; j < asteroids.length; j++) {
       const b = asteroids[j];
-      const aabbB = makeAabbForEntity(b);
-      if (!aabbB) continue;
-      const hit = intersectAabbs(aabbA, aabbB);
-      if (!hit) continue;
+      const rB = ASTEROID_BASE_RADIUS * (b.scale ?? 1);
+
+      const dx = b.transform.position.x - a.transform.position.x;
+      const dy = b.transform.position.y - a.transform.position.y;
+      const distSq = dx * dx + dy * dy;
+      const minDist = rA + rB;
+
+      if (distSq >= minDist * minDist) continue;
+
+      const dist = Math.sqrt(distSq) || 0.001; // guard against exact zero
       manifolds.push({
         idA: a.id,
         idB: b.id,
-        normal: hit.normal,
-        penetration: hit.penetration
+        // Normal points from A toward B — stable because it tracks the actual center direction.
+        normal: { x: dx / dist, y: dy / dist },
+        penetration: minDist - dist
       });
     }
   }
   return manifolds;
 }
 
+const SHIP_RADIUS = 18;
+
+/** Circle–circle test between the player ship and each asteroid. */
+export function computeShipAsteroidManifolds(state: GameState): ShipAsteroidManifold[] {
+  const ship = [...state.entities.values()].find((e) => e.kind === EntityKind.PlayerShip);
+  if (!ship) return [];
+
+  const manifolds: ShipAsteroidManifold[] = [];
+  for (const entity of state.entities.values()) {
+    if (entity.kind !== EntityKind.Asteroid) continue;
+    const rA = ASTEROID_BASE_RADIUS * (entity.scale ?? 1);
+
+    const dx = entity.transform.position.x - ship.transform.position.x;
+    const dy = entity.transform.position.y - ship.transform.position.y;
+    const distSq = dx * dx + dy * dy;
+    const minDist = SHIP_RADIUS + rA;
+    if (distSq >= minDist * minDist) continue;
+
+    const dist = Math.sqrt(distSq) || 0.001;
+    manifolds.push({
+      asteroidId: entity.id,
+      // Normal points from ship toward asteroid.
+      normal: { x: dx / dist, y: dy / dist },
+      penetration: minDist - dist
+    });
+  }
+  return manifolds;
+}
