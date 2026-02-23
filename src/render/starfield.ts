@@ -34,7 +34,7 @@ export function initStarfield(): void {
             tx: Math.random(),
             ty: Math.random(),
             parallax: 0.04 + Math.random() * 0.06,
-            size: 1.0,
+            size: 2.0,
             alpha: 0.3 + Math.random() * 0.4
         });
     }
@@ -43,7 +43,7 @@ export function initStarfield(): void {
             tx: Math.random(),
             ty: Math.random(),
             parallax: 0.12 + Math.random() * 0.10,
-            size: 2.0,
+            size: 4.0,
             alpha: 0.55 + Math.random() * 0.35
         });
     }
