@@ -13,6 +13,8 @@ export interface GameState {
   timeSeconds: number;
   nextAllowedFireTime: number;
   bulletLifetimes: Map<EntityId, number>;
+  /** remaining / total lifetime for each spark/debris particle. */
+  debrisLifetimes: Map<EntityId, { remaining: number; total: number }>;
   bulletAsteroidManifolds: BulletAsteroidManifold[];
   viewportWidth: number;
   viewportHeight: number;
@@ -31,6 +33,7 @@ export function createInitialGameState(viewportWidth: number, viewportHeight: nu
     timeSeconds: 0,
     nextAllowedFireTime: 0,
     bulletLifetimes: new Map<EntityId, number>(),
+    debrisLifetimes: new Map<EntityId, { remaining: number; total: number }>(),
     bulletAsteroidManifolds: [],
     viewportWidth,
     viewportHeight,

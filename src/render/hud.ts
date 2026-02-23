@@ -27,9 +27,9 @@ export function ensureHud(): void {
 
     // Label
     const label = document.createElement("span");
-    label.textContent = "HULL";
+    label.textContent = "SPACESHIP";
     Object.assign(label.style, {
-        color: "#aaa",
+        color: "#444",
         fontSize: "10px",
         letterSpacing: "3px",
         fontFamily: "system-ui, monospace",
@@ -63,7 +63,7 @@ export function ensureHud(): void {
     // HP text just under the bar
     textEl = document.createElement("span");
     Object.assign(textEl.style, {
-        color: "rgba(255,255,255,0.45)",
+        color: "rgba(0,0,0,0.45)",
         fontSize: "9px",
         fontFamily: "system-ui, monospace",
         letterSpacing: "1px"

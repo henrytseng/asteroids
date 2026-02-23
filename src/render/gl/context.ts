@@ -15,7 +15,7 @@ export function createGLContext(canvas: HTMLCanvasElement): GLContext | null {
 
   gl.enable(gl.DEPTH_TEST);
   gl.depthFunc(gl.LEQUAL);
-  gl.clearColor(0, 0, 0, 1);
+  gl.clearColor(1, 1, 1, 1);
 
   return { canvas, gl };
 }

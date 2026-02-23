@@ -2,13 +2,14 @@ import type { GameState } from "../game/state";
 import { EntityKind, type Quaternion } from "../game/types";
 import { createGLContext, type GLContext } from "./gl/context";
 import { createProgram } from "./gl/shaders";
-import { asteroidMeshes, bulletMesh, debrisMesh, playerShipMesh } from "./mesh";
+import { asteroidMeshes, bulletMesh, debrisMesh, sparkMesh, playerShipMesh } from "./mesh";
 
 const VERT_SRC = `
 attribute vec3 a_position;
 uniform vec2 u_offset;
 uniform float u_angle;
 uniform float u_scale;
+uniform float u_pointSize;
 void main() {
   float c = cos(u_angle);
   float s = sin(u_angle);
@@ -18,6 +19,7 @@ void main() {
   );
   vec3 pos = vec3(rotated * u_scale, a_position.z) + vec3(u_offset, 0.0);
   gl_Position = vec4(pos, 1.0);
+  gl_PointSize = u_pointSize;
 }
 `;
 
@@ -70,11 +72,12 @@ void main() {
   // Fade tips of the beam along X so ends don't look sharp.
   float xHalf = 0.028;
   float xFade = 1.0 - smoothstep(xHalf * 0.55, xHalf, abs(v_localPos.x));
-  vec3 coreColor = vec3(1.0, 1.0, 1.0);
-  vec3 glowColor = vec3(0.2, 0.85, 1.0);
+  // Deep red core + crimson glow.
+  vec3 coreColor = vec3(0.55, 0.0, 0.0);
+  vec3 glowColor = vec3(0.80, 0.05, 0.05);
   vec3 col = coreColor * core + glowColor * glow * (1.0 - core);
   float alpha = (core + glow * 0.6) * xFade;
-  gl_FragColor = vec4(col * alpha, alpha);
+  gl_FragColor = vec4(col, alpha);
 }
 `;
 
@@ -86,6 +89,7 @@ export interface Renderer {
   uniformAngle: WebGLUniformLocation | null;
   uniformScale: WebGLUniformLocation | null;
   uniformColor: WebGLUniformLocation | null;
+  uniformPointSize: WebGLUniformLocation | null;
   laserProgram: WebGLProgram;
   laserAttribPosition: number;
   laserUniformOffset: WebGLUniformLocation | null;
@@ -111,6 +115,7 @@ export function createRenderer(canvas: HTMLCanvasElement): Renderer | null {
   const uniformAngle = gl.getUniformLocation(program, "u_angle");
   const uniformScale = gl.getUniformLocation(program, "u_scale");
   const uniformColor = gl.getUniformLocation(program, "u_color");
+  const uniformPointSize = gl.getUniformLocation(program, "u_pointSize");
 
   // --- Laser program (bullets) ---
   const laserProgram = createProgram(gl, LASER_VERT_SRC, LASER_FRAG_SRC);
@@ -128,18 +133,22 @@ export function createRenderer(canvas: HTMLCanvasElement): Renderer | null {
   gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
 
   return {
-    glCtx, program, attribPosition, uniformOffset, uniformAngle, uniformScale, uniformColor,
+    glCtx, program, attribPosition, uniformOffset, uniformAngle, uniformScale, uniformColor, uniformPointSize,
     laserProgram, laserAttribPosition, laserUniformOffset, laserUniformAngle, laserUniformScale,
     buffer
   };
 }
 
+export function clearScene(renderer: Renderer): void {
+  const { glCtx } = renderer;
+  const { gl, canvas } = glCtx;
+  gl.viewport(0, 0, canvas.width, canvas.height);
+  gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+}
+
 export function renderScene(renderer: Renderer, state: GameState): void {
   const { glCtx, buffer } = renderer;
   const { gl, canvas } = glCtx;
-
-  gl.viewport(0, 0, canvas.width, canvas.height);
-  gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
 
   for (const entity of state.entities.values()) {
     const isBullet = entity.kind === EntityKind.Bullet;
@@ -153,6 +162,8 @@ export function renderScene(renderer: Renderer, state: GameState): void {
       mesh = bulletMesh;
     } else if (entity.kind === EntityKind.Debris) {
       mesh = debrisMesh;
+    } else if (entity.kind === EntityKind.Spark) {
+      mesh = sparkMesh;
     }
     if (!mesh) continue;
 
@@ -160,11 +171,11 @@ export function renderScene(renderer: Renderer, state: GameState): void {
     gl.bufferData(gl.ARRAY_BUFFER, mesh.vertices, gl.STATIC_DRAW);
 
     if (isBullet) {
-      // Switch to laser program + additive blending so beams bloom.
+      // Switch to laser program + normal alpha blending on white bg.
       gl.useProgram(renderer.laserProgram);
       gl.enableVertexAttribArray(renderer.laserAttribPosition);
       gl.vertexAttribPointer(renderer.laserAttribPosition, 3, gl.FLOAT, false, 0, 0);
-      gl.blendFunc(gl.ONE, gl.ONE);
+      gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
 
       const ndcX = (entity.transform.position.x / canvas.width) * 2 - 1;
       const ndcY = (entity.transform.position.y / canvas.height) * -2 + 1;
@@ -191,11 +202,20 @@ export function renderScene(renderer: Renderer, state: GameState): void {
       if (renderer.uniformScale) {
         gl.uniform1f(renderer.uniformScale, entity.scale ?? 1);
       }
-      gl.uniform4fv(renderer.uniformColor, mesh.color);
+      // Respect per-entity opacity (used for fading spark/debris particles).
+      const opacity = entity.opacity ?? 1.0;
+      const color = opacity === 1.0 ? mesh.color : new Float32Array([
+        mesh.color[0], mesh.color[1], mesh.color[2], mesh.color[3] * opacity
+      ]);
+      gl.uniform4fv(renderer.uniformColor, color);
+      // Sparks are bigger points; everything else uses 1px default.
+      if (renderer.uniformPointSize) {
+        gl.uniform1f(renderer.uniformPointSize, entity.kind === EntityKind.Spark ? 3.0 : 1.0);
+      }
     }
 
     const vertexCount = mesh.vertices.length / 3;
-    gl.drawArrays(gl.TRIANGLE_FAN, 0, vertexCount);
+    gl.drawArrays(entity.kind === EntityKind.Spark ? gl.POINTS : gl.TRIANGLE_FAN, 0, vertexCount);
   }
 }
 

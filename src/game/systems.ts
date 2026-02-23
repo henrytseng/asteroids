@@ -63,7 +63,7 @@ function spawnDriftingAsteroid(state: GameState): void {
   const speed = 60 + Math.random() * 90;
 
   // Randomise shape and size for each spawned asteroid.
-  const MESH_COUNT = 6;
+  const MESH_COUNT = 12;
   const meshVariant = Math.floor(Math.random() * MESH_COUNT);
   // Scale tiers: small (0.5), medium (0.85), large (1.3) with some jitter.
   const sizeTiers = [0.45, 0.75, 1.0, 1.3];
@@ -111,7 +111,7 @@ function spawnAsteroidExplosion(state: GameState, asteroidId: number): void {
     const vy = Math.sin(angle) * speed;
 
     // Fragments pick a nearby mesh variant so they look related to the parent.
-    const MESH_COUNT = 6;
+    const MESH_COUNT = 12;
     const parentVariant = asteroid.meshVariant ?? 0;
     const fragmentVariant = (parentVariant + Math.floor(Math.random() * 3)) % MESH_COUNT;
 
@@ -132,6 +132,42 @@ function spawnAsteroidExplosion(state: GameState, asteroidId: number): void {
   }
 }
 
+const SPARK_LIFETIME_MIN = 0.3;
+const SPARK_LIFETIME_MAX = 0.5;
+
+function spawnImpactSparks(
+  state: GameState,
+  x: number,
+  y: number,
+  bulletVx: number,
+  bulletVy: number
+): void {
+  const sparkCount = 20;
+  const speed = Math.hypot(bulletVx, bulletVy);
+  const baseAngle = Math.atan2(bulletVy, bulletVx);
+  for (let i = 0; i < sparkCount; i++) {
+    // Spread sparks in a ±50° cone around the bullet direction.
+    const spread = (Math.random() - 0.5) * (Math.PI * 80 / 180);
+    const sAngle = baseAngle + spread;
+    const sSpeed = speed * (0.15 + Math.random() * 0.35);
+    const total = SPARK_LIFETIME_MIN + Math.random() * (SPARK_LIFETIME_MAX - SPARK_LIFETIME_MIN);
+    const spark = addEntity(state, {
+      kind: EntityKind.Spark,
+      transform: {
+        position: { x, y, z: 0 },
+        rotation: quaternionFromAngleZ(sAngle)
+      },
+      physics: {
+        linearVelocity: { x: Math.cos(sAngle) * sSpeed, y: Math.sin(sAngle) * sSpeed, z: 0 },
+        angularVelocity: { x: 0, y: 0, z: 0 }
+      },
+      scale: 0.15 + Math.random() * 0.2,
+      opacity: 1.0
+    });
+    state.debrisLifetimes.set(spark.id, { remaining: total, total });
+  }
+}
+
 export function updateGameSystems(state: GameState, dtSeconds: number, control: ControlState): void {
   state.timeSeconds += dtSeconds;
 
@@ -139,10 +175,20 @@ export function updateGameSystems(state: GameState, dtSeconds: number, control: 
   const ship = [...state.entities.values()].find((e) => e.kind === EntityKind.PlayerShip);
   if (!ship) return;
 
+  // Regenerate health after 3 seconds without a collision.
+  const regenDelay = 3.0;    // seconds after last damage before regen starts
+  const regenRate = 4.0;    // HP per second
+  if (
+    state.health < state.maxHealth &&
+    state.timeSeconds - state.lastDamageTime > regenDelay
+  ) {
+    state.health = Math.min(state.maxHealth, state.health + regenRate * dtSeconds);
+  }
+
   const turnRateRadPerSec = 4.0;
   const thrustAccelPxPerSec2 = 900.0;
   const maxSpeedPxPerSec = 900.0;
-  const linearDampingPerSec = 2.0;
+  const linearDampingPerSec = 0.5;
   const asteroidSpawnIntervalSeconds = 2.5;
   const maxAsteroids = 10;
 
@@ -289,6 +335,17 @@ export function updateGameSystems(state: GameState, dtSeconds: number, control: 
 
   for (const manifold of state.bulletAsteroidManifolds) {
     const asteroid = state.entities.get(manifold.asteroidId);
+    const bullet = state.entities.get(manifold.bulletId);
+    // Spawn sparks at the impact point using the bullet's velocity for direction.
+    if (bullet?.physics) {
+      spawnImpactSparks(
+        state,
+        bullet.transform.position.x,
+        bullet.transform.position.y,
+        bullet.physics.linearVelocity.x,
+        bullet.physics.linearVelocity.y
+      );
+    }
     // Only fragment if the asteroid is large enough; tiny asteroids just vanish.
     if (asteroid && (asteroid.scale ?? 1) > MIN_FRAGMENT_SCALE) {
       spawnAsteroidExplosion(state, manifold.asteroidId);
@@ -296,6 +353,18 @@ export function updateGameSystems(state: GameState, dtSeconds: number, control: 
     state.entities.delete(manifold.bulletId);
     state.entities.delete(manifold.asteroidId);
     state.bulletLifetimes.delete(manifold.bulletId);
+  }
+
+  // Tick debris/spark lifetimes and fade them out.
+  for (const [id, lt] of [...state.debrisLifetimes.entries()]) {
+    lt.remaining -= dtSeconds;
+    if (lt.remaining <= 0) {
+      state.entities.delete(id);
+      state.debrisLifetimes.delete(id);
+    } else {
+      const entity = state.entities.get(id);
+      if (entity) entity.opacity = lt.remaining / lt.total;
+    }
   }
 
   // Ship–asteroid bounce: two-body impulse so both the ship and the rock react.

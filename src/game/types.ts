@@ -24,6 +24,7 @@ export enum EntityKind {
   PlayerShip = "PlayerShip",
   Asteroid = "Asteroid",
   Debris = "Debris",
+  Spark = "Spark",
   Bullet = "Bullet",
   AmmoPickup = "AmmoPickup"
 }
@@ -49,5 +50,7 @@ export interface Entity {
   collisionEnableTime?: number;
   /** Index into the asteroid mesh variants array; determines the asteroid's shape. */
   meshVariant?: number;
+  /** Render opacity 0–1; used to fade out short-lived effects like sparks. */
+  opacity?: number;
 }
 
