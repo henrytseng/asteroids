@@ -1,0 +1,40 @@
+import type { Entity, EntityId } from "./types";
+import type { BulletAsteroidManifold } from "./collisions";
+
+export interface GameState {
+  entities: Map<EntityId, Entity>;
+  nextEntityId: EntityId;
+  score: number;
+  lives: number;
+  timeSeconds: number;
+  nextAllowedFireTime: number;
+  bulletLifetimes: Map<EntityId, number>;
+  bulletAsteroidManifolds: BulletAsteroidManifold[];
+  viewportWidth: number;
+  viewportHeight: number;
+  asteroidSpawnAccumulator: number;
+}
+
+export function createInitialGameState(viewportWidth: number, viewportHeight: number): GameState {
+  return {
+    entities: new Map<EntityId, Entity>(),
+    nextEntityId: 1,
+    score: 0,
+    lives: 3,
+    timeSeconds: 0,
+    nextAllowedFireTime: 0,
+    bulletLifetimes: new Map<EntityId, number>(),
+    bulletAsteroidManifolds: [],
+    viewportWidth,
+    viewportHeight,
+    asteroidSpawnAccumulator: 0
+  };
+}
+
+export function addEntity(state: GameState, entity: Omit<Entity, "id">): Entity {
+  const id = state.nextEntityId++;
+  const full: Entity = { ...entity, id };
+  state.entities.set(id, full);
+  return full;
+}
+
