@@ -9,6 +9,7 @@ attribute vec3 a_position;
 uniform vec2 u_offset;
 uniform float u_angle;
 uniform float u_scale;
+uniform float u_aspect;
 uniform float u_pointSize;
 void main() {
   float c = cos(u_angle);
@@ -17,7 +18,9 @@ void main() {
     a_position.x * c - a_position.y * s,
     a_position.x * s + a_position.y * c
   );
-  vec3 pos = vec3(rotated * u_scale, a_position.z) + vec3(u_offset, 0.0);
+  vec2 scaled = rotated * u_scale;
+  scaled.x /= u_aspect;
+  vec3 pos = vec3(scaled, a_position.z) + vec3(u_offset, 0.0);
   gl_Position = vec4(pos, 1.0);
   gl_PointSize = u_pointSize;
 }
@@ -42,6 +45,7 @@ attribute vec3 a_position;
 uniform vec2 u_offset;
 uniform float u_angle;
 uniform float u_scale;
+uniform float u_aspect;
 varying vec2 v_localPos;
 void main() {
   v_localPos = a_position.xy;
@@ -51,7 +55,9 @@ void main() {
     a_position.x * c - a_position.y * s,
     a_position.x * s + a_position.y * c
   );
-  vec3 pos = vec3(rotated * u_scale, a_position.z) + vec3(u_offset, 0.0);
+  vec2 scaled = rotated * u_scale;
+  scaled.x /= u_aspect;
+  vec3 pos = vec3(scaled, a_position.z) + vec3(u_offset, 0.0);
   gl_Position = vec4(pos, 1.0);
 }
 `;
@@ -88,6 +94,7 @@ export interface Renderer {
   uniformOffset: WebGLUniformLocation | null;
   uniformAngle: WebGLUniformLocation | null;
   uniformScale: WebGLUniformLocation | null;
+  uniformAspect: WebGLUniformLocation | null;
   uniformColor: WebGLUniformLocation | null;
   uniformPointSize: WebGLUniformLocation | null;
   laserProgram: WebGLProgram;
@@ -95,6 +102,7 @@ export interface Renderer {
   laserUniformOffset: WebGLUniformLocation | null;
   laserUniformAngle: WebGLUniformLocation | null;
   laserUniformScale: WebGLUniformLocation | null;
+  laserUniformAspect: WebGLUniformLocation | null;
   buffer: WebGLBuffer;
 }
 
@@ -114,6 +122,7 @@ export function createRenderer(canvas: HTMLCanvasElement): Renderer | null {
   const uniformOffset = gl.getUniformLocation(program, "u_offset");
   const uniformAngle = gl.getUniformLocation(program, "u_angle");
   const uniformScale = gl.getUniformLocation(program, "u_scale");
+  const uniformAspect = gl.getUniformLocation(program, "u_aspect");
   const uniformColor = gl.getUniformLocation(program, "u_color");
   const uniformPointSize = gl.getUniformLocation(program, "u_pointSize");
 
@@ -124,6 +133,7 @@ export function createRenderer(canvas: HTMLCanvasElement): Renderer | null {
   const laserUniformOffset = gl.getUniformLocation(laserProgram, "u_offset");
   const laserUniformAngle = gl.getUniformLocation(laserProgram, "u_angle");
   const laserUniformScale = gl.getUniformLocation(laserProgram, "u_scale");
+  const laserUniformAspect = gl.getUniformLocation(laserProgram, "u_aspect");
 
   const buffer = gl.createBuffer();
   if (!buffer) throw new Error("Failed to create buffer");
@@ -133,8 +143,8 @@ export function createRenderer(canvas: HTMLCanvasElement): Renderer | null {
   gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
 
   return {
-    glCtx, program, attribPosition, uniformOffset, uniformAngle, uniformScale, uniformColor, uniformPointSize,
-    laserProgram, laserAttribPosition, laserUniformOffset, laserUniformAngle, laserUniformScale,
+    glCtx, program, attribPosition, uniformOffset, uniformAngle, uniformScale, uniformAspect, uniformColor, uniformPointSize,
+    laserProgram, laserAttribPosition, laserUniformOffset, laserUniformAngle, laserUniformScale, laserUniformAspect,
     buffer
   };
 }
@@ -149,6 +159,7 @@ export function clearScene(renderer: Renderer): void {
 export function renderScene(renderer: Renderer, state: GameState): void {
   const { glCtx, buffer } = renderer;
   const { gl, canvas } = glCtx;
+  const aspect = canvas.width / canvas.height;
 
   for (const entity of state.entities.values()) {
     const isBullet = entity.kind === EntityKind.Bullet;
@@ -186,6 +197,9 @@ export function renderScene(renderer: Renderer, state: GameState): void {
       if (renderer.laserUniformScale) {
         gl.uniform1f(renderer.laserUniformScale, entity.scale ?? 1);
       }
+      if (renderer.laserUniformAspect) {
+        gl.uniform1f(renderer.laserUniformAspect, aspect);
+      }
     } else {
       // Standard program + normal alpha blending.
       gl.useProgram(renderer.program);
@@ -201,6 +215,9 @@ export function renderScene(renderer: Renderer, state: GameState): void {
       }
       if (renderer.uniformScale) {
         gl.uniform1f(renderer.uniformScale, entity.scale ?? 1);
+      }
+      if (renderer.uniformAspect) {
+        gl.uniform1f(renderer.uniformAspect, aspect);
       }
       // Respect per-entity opacity (used for fading spark/debris particles).
       const opacity = entity.opacity ?? 1.0;

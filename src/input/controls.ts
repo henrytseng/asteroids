@@ -2,12 +2,17 @@ export interface ControlState {
   thrust: number;
   rotate: number;
   fire: boolean;
+  /** Set by mouse module when mouse mode is active. Canvas pixel coords. */
+  mouseTarget?: { x: number; y: number };
+  /** True when the ship should be driven by mouse rather than keyboard. */
+  mouseModeActive: boolean;
 }
 
 const defaultControlState: ControlState = {
   thrust: 0,
   rotate: 0,
-  fire: false
+  fire: false,
+  mouseModeActive: false
 };
 
 const current: ControlState = { ...defaultControlState };

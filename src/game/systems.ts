@@ -185,26 +185,45 @@ export function updateGameSystems(state: GameState, dtSeconds: number, control: 
     state.health = Math.min(state.maxHealth, state.health + regenRate * dtSeconds);
   }
 
-  const turnRateRadPerSec = 4.0;
   const thrustAccelPxPerSec2 = 900.0;
   const maxSpeedPxPerSec = 900.0;
   const linearDampingPerSec = 0.5;
   const asteroidSpawnIntervalSeconds = 2.5;
   const maxAsteroids = 10;
+  const MOUSE_DEAD_ZONE = 80; // px — don't thrust when cursor is this close to ship
 
   ship.physics ??= {
     linearVelocity: { x: 0, y: 0, z: 0 },
     angularVelocity: { x: 0, y: 0, z: 0 }
   };
 
-  const angle = angleZFromQuaternion(ship.transform.rotation);
-  const newAngle = angle + control.rotate * turnRateRadPerSec * dtSeconds;
-  ship.transform.rotation = quaternionFromAngleZ(newAngle);
+  let newAngle: number;
+
+  if (control.mouseModeActive && control.mouseTarget) {
+    // Mouse mode: rotate ship to face cursor, thrust when far enough away.
+    const dx = control.mouseTarget.x - ship.transform.position.x;
+    const dy = control.mouseTarget.y - ship.transform.position.y;
+    const targetAngle = Math.atan2(dy, dx);
+    newAngle = targetAngle;
+    ship.transform.rotation = quaternionFromAngleZ(newAngle);
+
+    const dist = Math.hypot(dx, dy);
+    if (dist > MOUSE_DEAD_ZONE) {
+      ship.physics.linearVelocity.x += Math.cos(newAngle) * thrustAccelPxPerSec2 * dtSeconds;
+      ship.physics.linearVelocity.y += Math.sin(newAngle) * thrustAccelPxPerSec2 * dtSeconds;
+    }
+  } else {
+    // Keyboard mode: manual turn + thrust.
+    const turnRateRadPerSec = 4.0;
+    const angle = angleZFromQuaternion(ship.transform.rotation);
+    newAngle = angle + control.rotate * turnRateRadPerSec * dtSeconds;
+    ship.transform.rotation = quaternionFromAngleZ(newAngle);
+    ship.physics.linearVelocity.x += Math.cos(newAngle) * (control.thrust * thrustAccelPxPerSec2 * dtSeconds);
+    ship.physics.linearVelocity.y += Math.sin(newAngle) * (control.thrust * thrustAccelPxPerSec2 * dtSeconds);
+  }
 
   const forwardX = Math.cos(newAngle);
   const forwardY = Math.sin(newAngle);
-  ship.physics.linearVelocity.x += forwardX * (control.thrust * thrustAccelPxPerSec2 * dtSeconds);
-  ship.physics.linearVelocity.y += forwardY * (control.thrust * thrustAccelPxPerSec2 * dtSeconds);
 
   const bulletSpeedPxPerSec = 1400.0;
   const bulletCooldownSeconds = 0.2;

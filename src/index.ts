@@ -2,6 +2,7 @@ import { createInitialGameState } from "./game/state";
 import { spawnPlayer } from "./game/entities";
 import { updateGameSystems } from "./game/systems";
 import { installKeyboardControls, getControlState } from "./input/controls";
+import { installMouseControls, getMouseState } from "./input/mouse";
 import { createRenderer, renderScene, clearScene } from "./render/renderer";
 import { createPhysicsBridge, sendToPhysics, applyLatestSnapshot } from "./integration/bridge";
 import type { MainToPhysicsMessage } from "./integration/physicsMessages";
@@ -21,6 +22,12 @@ function ensureCanvas(): HTMLCanvasElement {
     document.body.style.margin = "0";
     document.body.appendChild(canvas);
   }
+
+  window.addEventListener("resize", () => {
+    canvas!.width = window.innerWidth;
+    canvas!.height = window.innerHeight;
+  });
+
   return canvas;
 }
 
@@ -35,6 +42,7 @@ function createPhysicsWorker(): Worker {
 function main() {
   const canvas = ensureCanvas();
   installKeyboardControls();
+  installMouseControls(canvas);
 
   const createdRenderer = createRenderer(canvas);
   if (!createdRenderer) return;
@@ -59,6 +67,15 @@ function main() {
     lastTime = now;
 
     const control = getControlState();
+    const mouse = getMouseState();
+
+    // Merge mouse state into control for this frame.
+    if (mouse.active) {
+      control.mouseModeActive = true;
+      control.mouseTarget = { x: mouse.x, y: mouse.y };
+      control.fire = control.fire || mouse.firing;
+    }
+
     updateGameSystems(state, dt, control);
     const controlMsg: MainToPhysicsMessage = {
       type: "ControlUpdate",
