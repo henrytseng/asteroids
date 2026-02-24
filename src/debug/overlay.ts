@@ -3,12 +3,12 @@ let frameCount = 0;
 let fps = 0;
 
 function ensureOverlayElement(i: Number = 0): HTMLDivElement {
-  let el = document.getElementById("debug-overlay") as HTMLDivElement | null;
+  const target_id = `debug-overlay-${i}`;
+  let el = document.getElementById(target_id) as HTMLDivElement | null;
   if (!el) {
     const y = 8 + i * 24;
     el = document.createElement("div");
-    el.id = `debug-overlay-${i}`;
-    el.classList.add("debug-overlay");
+    el.id = target_id;
     el.style.position = "fixed";
     el.style.left = "8px";
     el.style.top = `${y}px`;
