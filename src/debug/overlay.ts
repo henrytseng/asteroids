@@ -2,7 +2,7 @@ let lastFrameTime = performance.now();
 let frameCount = 0;
 let fps = 0;
 
-function ensureOverlayElement(i: Number = 0): HTMLDivElement {
+function ensureOverlayElement(i: number = 0): HTMLDivElement {
   const target_id = `debug-overlay-${i}`;
   let el = document.getElementById(target_id) as HTMLDivElement | null;
   if (!el) {
@@ -21,7 +21,18 @@ function ensureOverlayElement(i: Number = 0): HTMLDivElement {
   return el;
 }
 
-export function updateDebugOverlay(num_entities: Number = 0): void {
+export interface InputDebugInfo {
+  mouseActive: boolean;
+  mouseX: number;
+  mouseY: number;
+  touchActive: boolean;
+  touchX: number;
+  touchY: number;
+  touchPoints: number;
+  firing: boolean;
+}
+
+export function updateDebugOverlay(num_entities: Number = 0, input?: InputDebugInfo): void {
   const now = performance.now();
   frameCount++;
   if (now - lastFrameTime >= 1000) {
@@ -30,6 +41,19 @@ export function updateDebugOverlay(num_entities: Number = 0): void {
     lastFrameTime = now;
   }
 
-  ensureOverlayElement().textContent = `FPS: ${fps.toFixed(1)}`;
-  ensureOverlayElement(1).textContent = `num_entities: ${num_entities}`;
+  ensureOverlayElement(0).textContent = `FPS: ${fps.toFixed(1)}`;
+  ensureOverlayElement(1).textContent = `entities: ${num_entities}`;
+
+  if (input) {
+    const mouseMode = input.mouseActive ? "active" : "idle";
+    ensureOverlayElement(2).textContent =
+      `mouse [${mouseMode}]  x:${input.mouseX.toFixed(0)}  y:${input.mouseY.toFixed(0)}`;
+
+    const touchMode = input.touchActive ? "active" : "idle";
+    ensureOverlayElement(3).textContent =
+      `touch [${touchMode}]  fingers:${input.touchPoints}  x:${input.touchX.toFixed(0)}  y:${input.touchY.toFixed(0)}`;
+
+    ensureOverlayElement(4).textContent =
+      `fire: ${input.firing ? "🔥 FIRING" : "—"}`;
+  }
 }

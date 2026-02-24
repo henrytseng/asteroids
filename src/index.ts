@@ -94,7 +94,16 @@ function main() {
     clearScene(renderer);
     renderStarfield(renderer, state);
     renderScene(renderer, state);
-    updateDebugOverlay(state.entities.size);
+    updateDebugOverlay(state.entities.size, {
+      mouseActive: mouse.active,
+      mouseX: mouse.x,
+      mouseY: mouse.y,
+      touchActive: touch.active,
+      touchX: touch.x,
+      touchY: touch.y,
+      touchPoints: touch.touchPoints,
+      firing: control.fire
+    });
     updateHud(state);
 
     requestAnimationFrame(loop);

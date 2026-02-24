@@ -18,6 +18,8 @@ export interface TouchState {
     x: number;
     /** Target Y in canvas pixel space (latest touch point). */
     y: number;
+    /** Number of fingers currently on screen. */
+    touchPoints: number;
     /**
      * True for exactly one frame after a tap is detected.
      * getTouchState() consumes and clears this flag.
@@ -29,6 +31,7 @@ const state: TouchState = {
     active: false,
     x: 0,
     y: 0,
+    touchPoints: 0,
     firing: false
 };
 
@@ -53,6 +56,7 @@ export function installTouchControls(canvas: HTMLCanvasElement): void {
         state.active = true;
         state.x = x;
         state.y = y;
+        state.touchPoints = e.touches.length;
         touchStartX = x;
         touchStartY = y;
         touchStartTime = performance.now();
@@ -65,10 +69,12 @@ export function installTouchControls(canvas: HTMLCanvasElement): void {
         const { x, y } = canvasCoords(canvas, touch);
         state.x = x;
         state.y = y;
+        state.touchPoints = e.touches.length;
     }, { passive: false });
 
     canvas.addEventListener("touchend", (e) => {
         e.preventDefault();
+        state.touchPoints = e.touches.length;
         // If all fingers lifted, deactivate steering.
         if (e.touches.length === 0) {
             state.active = false;
@@ -86,6 +92,7 @@ export function installTouchControls(canvas: HTMLCanvasElement): void {
     canvas.addEventListener("touchcancel", (e) => {
         e.preventDefault();
         state.active = false;
+        state.touchPoints = 0;
     }, { passive: false });
 }
 
