@@ -3,6 +3,7 @@ import { spawnPlayer } from "./game/entities";
 import { updateGameSystems } from "./game/systems";
 import { installKeyboardControls, getControlState } from "./input/controls";
 import { installMouseControls, getMouseState } from "./input/mouse";
+import { installTouchControls, getTouchState } from "./input/touch";
 import { createRenderer, renderScene, clearScene } from "./render/renderer";
 import { createPhysicsBridge, sendToPhysics, applyLatestSnapshot } from "./integration/bridge";
 import type { MainToPhysicsMessage } from "./integration/physicsMessages";
@@ -43,6 +44,7 @@ function main() {
   const canvas = ensureCanvas();
   installKeyboardControls();
   installMouseControls(canvas);
+  installTouchControls(canvas);
 
   const createdRenderer = createRenderer(canvas);
   if (!createdRenderer) return;
@@ -68,9 +70,14 @@ function main() {
 
     const control = getControlState();
     const mouse = getMouseState();
+    const touch = getTouchState();
 
-    // Merge mouse state into control for this frame.
-    if (mouse.active) {
+    // Touch takes priority; falls back to mouse; falls back to keyboard.
+    if (touch.active || touch.firing) {
+      control.mouseModeActive = true;
+      control.mouseTarget = { x: touch.x, y: touch.y };
+      control.fire = touch.firing;
+    } else if (mouse.active) {
       control.mouseModeActive = true;
       control.mouseTarget = { x: mouse.x, y: mouse.y };
       control.fire = control.fire || mouse.firing;
