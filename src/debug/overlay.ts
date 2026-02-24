@@ -2,14 +2,16 @@ let lastFrameTime = performance.now();
 let frameCount = 0;
 let fps = 0;
 
-function ensureOverlayElement(): HTMLDivElement {
+function ensureOverlayElement(i: Number = 0): HTMLDivElement {
   let el = document.getElementById("debug-overlay") as HTMLDivElement | null;
   if (!el) {
+    const y = 8 + i * 24;
     el = document.createElement("div");
-    el.id = "debug-overlay";
+    el.id = `debug-overlay-${i}`;
+    el.classList.add("debug-overlay");
     el.style.position = "fixed";
     el.style.left = "8px";
-    el.style.top = "8px";
+    el.style.top = `${y}px`;
     el.style.padding = "4px 8px";
     el.style.background = "rgba(0,0,0,0.5)";
     el.style.color = "#0f0";
@@ -19,7 +21,7 @@ function ensureOverlayElement(): HTMLDivElement {
   return el;
 }
 
-export function updateDebugOverlay(): void {
+export function updateDebugOverlay(num_entities: Number = 0): void {
   const now = performance.now();
   frameCount++;
   if (now - lastFrameTime >= 1000) {
@@ -27,7 +29,7 @@ export function updateDebugOverlay(): void {
     frameCount = 0;
     lastFrameTime = now;
   }
-  const el = ensureOverlayElement();
-  el.textContent = `FPS: ${fps.toFixed(1)}`;
-}
 
+  ensureOverlayElement().textContent = `FPS: ${fps.toFixed(1)}`;
+  ensureOverlayElement(1).textContent = `num_entities: ${num_entities}`;
+}

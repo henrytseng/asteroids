@@ -70,7 +70,7 @@ function main() {
     clearScene(renderer);
     renderStarfield(renderer, state);
     renderScene(renderer, state);
-    updateDebugOverlay();
+    updateDebugOverlay(state.entities.size);
     updateHud(state);
 
     requestAnimationFrame(loop);
