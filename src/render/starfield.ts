@@ -58,8 +58,9 @@ export function renderStarfield(renderer: Renderer, state: GameState): void {
     const { glCtx, program, attribPosition, uniformOffset, uniformAngle,
         uniformScale, uniformColor, uniformPointSize, buffer } = renderer;
     const { gl, canvas } = glCtx;
-    const W = canvas.width;
-    const H = canvas.height;
+    const W = state.viewportWidth;
+    const H = state.viewportHeight;
+    const dpr = canvas.width / state.viewportWidth;
 
     // Get ship world position for pan offset.
     const ship = [...state.entities.values()].find(e => e.kind === EntityKind.PlayerShip);
@@ -93,7 +94,7 @@ export function renderStarfield(renderer: Renderer, state: GameState): void {
 
         // Only change the point-size uniform when the size actually changes.
         if (uniformPointSize && star.size !== lastSize) {
-            gl.uniform1f(uniformPointSize, star.size);
+            gl.uniform1f(uniformPointSize, star.size * dpr);
             lastSize = star.size;
         }
 

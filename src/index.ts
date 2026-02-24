@@ -13,21 +13,30 @@ import { initStarfield, renderStarfield } from "./render/starfield";
 
 const canvasId = "game-canvas";
 
+function isMobile(): boolean {
+  return /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+}
+
 function ensureCanvas(): HTMLCanvasElement {
   let canvas = document.getElementById(canvasId) as HTMLCanvasElement | null;
   if (!canvas) {
     canvas = document.createElement("canvas");
     canvas.id = canvasId;
-    canvas.width = window.innerWidth;
-    canvas.height = window.innerHeight;
     document.body.style.margin = "0";
     document.body.appendChild(canvas);
   }
 
-  window.addEventListener("resize", () => {
-    canvas!.width = window.innerWidth;
-    canvas!.height = window.innerHeight;
-  });
+  const updateSize = () => {
+    const dpr = isMobile() ? (window.devicePixelRatio || 1) : 1;
+    canvas!.style.width = window.innerWidth + "px";
+    canvas!.style.height = window.innerHeight + "px";
+    canvas!.width = window.innerWidth * dpr;
+    canvas!.height = window.innerHeight * dpr;
+  };
+
+  updateSize();
+
+  window.addEventListener("resize", updateSize);
 
   return canvas;
 }
@@ -50,8 +59,13 @@ function main() {
   if (!createdRenderer) return;
   const renderer = createdRenderer;
 
-  const state = createInitialGameState(canvas.width, canvas.height);
-  spawnPlayer(state, { x: canvas.width / 2, y: canvas.height / 2, z: 0 });
+  const state = createInitialGameState(window.innerWidth, window.innerHeight);
+  spawnPlayer(state, { x: window.innerWidth / 2, y: window.innerHeight / 2, z: 0 });
+
+  window.addEventListener("resize", () => {
+    state.viewportWidth = window.innerWidth;
+    state.viewportHeight = window.innerHeight;
+  });
 
   ensureHud();
   initStarfield();

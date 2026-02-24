@@ -159,7 +159,8 @@ export function clearScene(renderer: Renderer): void {
 export function renderScene(renderer: Renderer, state: GameState): void {
   const { glCtx, buffer } = renderer;
   const { gl, canvas } = glCtx;
-  const aspect = canvas.width / canvas.height;
+  const aspect = state.viewportWidth / state.viewportHeight;
+  const dpr = canvas.width / state.viewportWidth;
 
   for (const entity of state.entities.values()) {
     const isBullet = entity.kind === EntityKind.Bullet;
@@ -188,8 +189,8 @@ export function renderScene(renderer: Renderer, state: GameState): void {
       gl.vertexAttribPointer(renderer.laserAttribPosition, 3, gl.FLOAT, false, 0, 0);
       gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
 
-      const ndcX = (entity.transform.position.x / canvas.width) * 2 - 1;
-      const ndcY = (entity.transform.position.y / canvas.height) * -2 + 1;
+      const ndcX = (entity.transform.position.x / state.viewportWidth) * 2 - 1;
+      const ndcY = (entity.transform.position.y / state.viewportHeight) * -2 + 1;
       gl.uniform2f(renderer.laserUniformOffset, ndcX, ndcY);
       if (renderer.laserUniformAngle) {
         gl.uniform1f(renderer.laserUniformAngle, -angleZFromQuaternion(entity.transform.rotation));
@@ -207,8 +208,8 @@ export function renderScene(renderer: Renderer, state: GameState): void {
       gl.vertexAttribPointer(renderer.attribPosition, 3, gl.FLOAT, false, 0, 0);
       gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
 
-      const ndcX = (entity.transform.position.x / canvas.width) * 2 - 1;
-      const ndcY = (entity.transform.position.y / canvas.height) * -2 + 1;
+      const ndcX = (entity.transform.position.x / state.viewportWidth) * 2 - 1;
+      const ndcY = (entity.transform.position.y / state.viewportHeight) * -2 + 1;
       gl.uniform2f(renderer.uniformOffset, ndcX, ndcY);
       if (renderer.uniformAngle) {
         gl.uniform1f(renderer.uniformAngle, -angleZFromQuaternion(entity.transform.rotation));
@@ -227,7 +228,8 @@ export function renderScene(renderer: Renderer, state: GameState): void {
       gl.uniform4fv(renderer.uniformColor, color);
       // Sparks are bigger points; everything else uses 1px default.
       if (renderer.uniformPointSize) {
-        gl.uniform1f(renderer.uniformPointSize, entity.kind === EntityKind.Spark ? 3.0 : 1.0);
+        const pSize = entity.kind === EntityKind.Spark ? 3.0 : 1.0;
+        gl.uniform1f(renderer.uniformPointSize, pSize * dpr);
       }
     }
 
