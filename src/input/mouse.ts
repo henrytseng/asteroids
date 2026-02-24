@@ -62,6 +62,13 @@ export function installMouseControls(canvas: HTMLCanvasElement): void {
 
     // Prevent context menu on right-click over canvas.
     canvas.addEventListener("contextmenu", (e) => e.preventDefault());
+
+    // Any keypress immediately returns control to keyboard.
+    window.addEventListener("keydown", () => {
+        if (idleTimer !== null) clearTimeout(idleTimer);
+        state.active = false;
+        state.firing = false;
+    });
 }
 
 export function getMouseState(): MouseState {
