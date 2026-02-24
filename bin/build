@@ -1,0 +1,20 @@
+#!/bin/bash
+
+set -euo pipefail
+
+cwd=$(pwd)
+script_dir=$(dirname "$0")
+
+on_complete() {
+    echo "Build complete!"
+    cd $cwd
+}
+
+run_task() {
+    echo "Starting build..."
+    npm run build
+}
+
+cd $script_dir/..
+trap on_complete SIGINT SIGTERM EXIT
+run_task
